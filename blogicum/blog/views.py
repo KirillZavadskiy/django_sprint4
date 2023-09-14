@@ -128,7 +128,7 @@ class CategoryPostsListView(ListView):
             Category,
             slug=self.kwargs['category_slug'],
             is_published=True,
-            )
+        )
         return (
             self.model.objects.select_related('category')
             .filter(
