@@ -10,6 +10,8 @@ SECRET_KEY = (
 DEBUG = True
 
 ALLOWED_HOSTS = [
+    'www.zavad.pythonanywhere.com',
+    'zavad.pythonanywhere.com',
     'localhost',
     '127.0.0.1',
 ]

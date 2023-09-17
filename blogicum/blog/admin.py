@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Location, Post
+from .models import Category, Comment, Location, Post
 
 
 @admin.register(Category)
@@ -34,6 +34,18 @@ class PostAdmin(admin.ModelAdmin):
         'author',
         'location',
         'category',
+        'image',
     )
     list_editable = ('is_published',)
     search_fields = ('title',)
+    readonly_fields = ['image_tag']
+
+
+@admin.register(Comment)
+class CommentAdmin(admin.ModelAdmin):
+    list_display = (
+        'text',
+        'is_published',
+        'author'
+    )
+    list_editable = ('is_published',)
