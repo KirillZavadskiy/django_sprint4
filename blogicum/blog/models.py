@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.urls import reverse
+from django.utils.html import mark_safe
 
 User = get_user_model()
 AMT_SIGN_TITLE = 30
@@ -85,9 +87,16 @@ class Post(PubCreatModel):
         Category,
         models.SET_NULL,
         null=True,
-        verbose_name='Категория'
+        verbose_name='Категория',
+        related_name='categories',
     )
     image = models.ImageField('Фото', upload_to='images', blank=True)
+
+    def image_tag(self):
+        return mark_safe(
+            '<img src="/%s" width="150" height="150" />' % (self.image)
+        )
+    image_tag.short_description = 'Фото'
 
     class Meta:
         verbose_name = 'публикация'
@@ -95,7 +104,10 @@ class Post(PubCreatModel):
         ordering = ('-pub_date',)
 
     def __str__(self):
-        return self.title
+        return self.title[:AMT_SIGN_TITLE]
+
+    def get_absolute_url(self):
+        return reverse('blog:post_detail', kwargs={'post_id': self.pk})
 
 
 class Comment(PubCreatModel):
@@ -105,18 +117,22 @@ class Comment(PubCreatModel):
     post = models.ForeignKey(
         Post,
         on_delete=models.CASCADE,
-        related_name='comment'
+        related_name='comments'
     )
     author = models.ForeignKey(
         User, on_delete=models.CASCADE,
         verbose_name='Автор публикации',
         related_name='comment'
     )
+    created_at = models.DateTimeField(
+        'Добавлено',
+        auto_now_add=True,
+    )
 
     class Meta:
         verbose_name = 'комментарий'
         verbose_name_plural = 'Комментарии'
-        ordering = ("id",)
+        ordering = ("created_at",)
 
     def __str__(self):
         return self.text[:AMT_SIGN_TITLE]
