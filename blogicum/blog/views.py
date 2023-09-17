@@ -71,13 +71,19 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         )
 
 
-class PostUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
-    '''Редактирование поста.'''
+class PostMixin:
+    '''Миксин для классов Post.'''
 
     form_class = PostForm
     model = Post
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
+
+
+class PostUpdateView(
+    LoginRequiredMixin, UserPassesTestMixin, PostMixin, UpdateView
+):
+    '''Редактирование поста.'''
 
     def handle_no_permission(self):
         return redirect('blog:post_detail', post_id=self.kwargs['post_id'])
@@ -89,13 +95,11 @@ class PostUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         return self.get_object().author == self.request.user
 
 
-class PostDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+class PostDeleteView(
+    LoginRequiredMixin, UserPassesTestMixin, PostMixin, DeleteView
+):
     '''Удаление поста.'''
 
-    form_class = PostForm
-    model = Post
-    template_name = 'blog/create.html'
-    pk_url_kwarg = 'post_id'
     success_url = reverse_lazy('blog:index')
 
     def get_context_data(self, **kwargs):
@@ -138,54 +142,45 @@ class CategoryPostsListView(ListView):
         return context
 
 
-class CommentCreateView(LoginRequiredMixin, CreateView):
-    '''Создание комментария.'''
+class CommentMixin:
+    '''Миксин для классов Comment.'''
 
+    form_class = CommentForm
     model = Comment
     template_name = 'blog/comment.html'
-    form_class = CommentForm
+
+    def get_success_url(self):
+        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
+
+    def test_func(self):
+        if self.get_object().author == self.request.user:
+            return True
+        return False
+
+
+class CommentCreateView(LoginRequiredMixin, CommentMixin, CreateView):
+    '''Создание комментария.'''
 
     def form_valid(self, form):
         form.instance.author = self.request.user
         form.instance.post = get_object_or_404(Post, pk=self.kwargs['post_id'])
         return super().form_valid(form)
 
-    def get_success_url(self):
-        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
 
-
-class CommentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+class CommentUpdateView(
+    LoginRequiredMixin, CommentMixin, UserPassesTestMixin, UpdateView
+):
     '''Редактирование комментария.'''
 
-    form_class = CommentForm
-    model = Comment
-    template_name = 'blog/comment.html'
     pk_url_kwarg = 'comment_id'
 
-    def get_success_url(self):
-        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
 
-    def test_func(self):
-        if self.get_object().author == self.request.user:
-            return True
-        return False
-
-
-class CommentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+class CommentDeleteView(
+    LoginRequiredMixin, CommentMixin, UserPassesTestMixin, DeleteView
+):
     '''Удаление комментария.'''
 
-    form_class = CommentForm
-    model = Comment
-    template_name = 'blog/comment.html'
     pk_url_kwarg = 'comment_id'
-
-    def get_success_url(self):
-        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
-
-    def test_func(self):
-        if self.get_object().author == self.request.user:
-            return True
-        return False
 
 
 class ProfileListView(ListView):
