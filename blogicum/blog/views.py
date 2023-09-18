@@ -12,21 +12,30 @@ from .models import Category, Comment, Post, User
 COUNT_OF_POST = 10
 
 
-class PostListView(ListView):
-    '''Главная страница со всеми постами.'''
+class BaseFormMixin:
+    '''Родительский Миксин.'''
 
     model = Post
     paginate_by = COUNT_OF_POST
 
     def get_queryset(self):
-        return (
-            Post.objects.select_related('author')
+        self.queryset = (
+            Post.objects.select_related('author', 'category', 'location')
             .filter(
                 is_published=True,
                 category__is_published=True,
                 pub_date__lte=timezone.now()
             )
-            .annotate(comment_count=Count('comments'))
+        )
+        return self.queryset
+
+
+class PostListView(BaseFormMixin, ListView):
+    '''Главная страница со всеми постами.'''
+
+    def get_queryset(self):
+        return (
+            super().get_queryset().annotate(comment_count=Count('comments'))
             .order_by('-pub_date')
         )
 
@@ -39,8 +48,16 @@ class PostDetailView(LoginRequiredMixin, DetailView):
     pk_url_kwarg = 'post_id'
 
     def get_object(self):
-        data = Post.objects.select_related('author').filter(
-            Q(author=self.request.user) | Q(is_published=True)
+        data = (
+            Post.objects.select_related('author', 'category', 'location')
+            .filter(
+                Q(author=self.request.user)
+                | Q(
+                    is_published=True,
+                    category__is_published=True,
+                    pub_date__lte=timezone.now()
+                )
+            )
         )
         return get_object_or_404(
             data,
@@ -71,7 +88,7 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         )
 
 
-class PostMixin:
+class PostMixin(UserPassesTestMixin):
     '''Миксин для классов Post.'''
 
     form_class = PostForm
@@ -79,24 +96,24 @@ class PostMixin:
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
 
-
-class PostUpdateView(
-    LoginRequiredMixin, UserPassesTestMixin, PostMixin, UpdateView
-):
-    '''Редактирование поста.'''
-
     def handle_no_permission(self):
         return redirect('blog:post_detail', post_id=self.kwargs['post_id'])
-
-    def get_success_url(self):
-        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
 
     def test_func(self):
         return self.get_object().author == self.request.user
 
 
+class PostUpdateView(
+    LoginRequiredMixin, PostMixin, UpdateView
+):
+    '''Редактирование поста.'''
+
+    def get_success_url(self):
+        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
+
+
 class PostDeleteView(
-    LoginRequiredMixin, UserPassesTestMixin, PostMixin, DeleteView
+    LoginRequiredMixin, PostMixin, DeleteView
 ):
     '''Удаление поста.'''
 
@@ -107,15 +124,10 @@ class PostDeleteView(
         context['form'] = {'instance': self.object}
         return context
 
-    def test_func(self):
-        return self.get_object().author == self.request.user
 
-
-class CategoryPostsListView(ListView):
+class CategoryPostsListView(BaseFormMixin, ListView):
     '''Страница с постами определенной категории.'''
 
-    model = Post
-    paginate_by = COUNT_OF_POST
     template_name = 'blog/category.html'
 
     def get_queryset(self):
@@ -125,12 +137,8 @@ class CategoryPostsListView(ListView):
             is_published=True,
         )
         return (
-            self.model.objects.select_related('category')
-            .filter(
-                category__slug=self.kwargs['category_slug'],
-                is_published=True,
-                category__is_published=True,
-                pub_date__lte=timezone.now()
+            super().get_queryset().filter(
+                category__slug=self.kwargs['category_slug']
             )
             .order_by('-pub_date')
             .annotate(comment_count=Count('comments'))
@@ -148,14 +156,13 @@ class CommentMixin:
     form_class = CommentForm
     model = Comment
     template_name = 'blog/comment.html'
+    pk_url_kwarg = 'comment_id'
 
     def get_success_url(self):
         return reverse('blog:post_detail', args=[self.kwargs['post_id']])
 
-    def test_func(self):
-        if self.get_object().author == self.request.user:
-            return True
-        return False
+    def test_func(self) -> True:
+        return self.get_object().author == self.request.user
 
 
 class CommentCreateView(LoginRequiredMixin, CommentMixin, CreateView):
@@ -172,7 +179,7 @@ class CommentUpdateView(
 ):
     '''Редактирование комментария.'''
 
-    pk_url_kwarg = 'comment_id'
+    pass
 
 
 class CommentDeleteView(
@@ -180,14 +187,12 @@ class CommentDeleteView(
 ):
     '''Удаление комментария.'''
 
-    pk_url_kwarg = 'comment_id'
+    pass
 
 
-class ProfileListView(ListView):
+class ProfileListView(BaseFormMixin, ListView):
     '''Страница профиля.'''
 
-    model = Post
-    paginate_by = COUNT_OF_POST
     template_name = 'blog/profile.html'
 
     def get_queryset(self):
@@ -197,7 +202,7 @@ class ProfileListView(ListView):
         )
         if self.request.user == self.get_username:
             return (
-                Post.objects.select_related('author')
+                Post.objects.select_related('author', 'category', 'location')
                 .filter(
                     author__username=self.kwargs['username']
                 )
@@ -205,12 +210,8 @@ class ProfileListView(ListView):
                 .annotate(comment_count=Count('comments'))
             )
         return (
-            self.model.objects.select_related('author')
-            .filter(
-                author__username=self.kwargs['username'],
-                is_published=True,
-                category__is_published=True,
-                pub_date__lte=timezone.now()
+            super().get_queryset().filter(
+                author__username=self.kwargs['username']
             )
             .order_by('-pub_date')
             .annotate(comment_count=Count('comments'))

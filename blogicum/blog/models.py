@@ -1,3 +1,4 @@
+from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.urls import reverse
@@ -60,6 +61,9 @@ class Location(PubCreatModel):
         return self.name[:AMT_SIGN_TITLE]
 
 
+@admin.display(
+    description='Фото'
+)
 class Post(PubCreatModel):
     '''Модель поста.'''
 
@@ -88,7 +92,7 @@ class Post(PubCreatModel):
         models.SET_NULL,
         null=True,
         verbose_name='Категория',
-        related_name='categories',
+        related_name='posts',
     )
     image = models.ImageField('Фото', upload_to='images', blank=True)
 
@@ -96,7 +100,6 @@ class Post(PubCreatModel):
         return mark_safe(
             '<img src="/%s" width="150" height="150" />' % (self.image)
         )
-    image_tag.short_description = 'Фото'
 
     class Meta:
         verbose_name = 'публикация'
@@ -122,7 +125,7 @@ class Comment(PubCreatModel):
     author = models.ForeignKey(
         User, on_delete=models.CASCADE,
         verbose_name='Автор публикации',
-        related_name='comment'
+        related_name='comments'
     )
     created_at = models.DateTimeField(
         'Добавлено',
