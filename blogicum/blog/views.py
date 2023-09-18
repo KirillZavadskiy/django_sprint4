@@ -1,43 +1,20 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.db.models import Count, Q
-from django.shortcuts import get_object_or_404, redirect
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import (CreateView, DeleteView, DetailView, ListView,
                                   UpdateView)
 
 from .forms import CommentForm, PostForm, ProfileForm
-from .models import Category, Comment, Post, User
-
-COUNT_OF_POST = 10
-
-
-class BaseFormMixin:
-    '''Родительский Миксин.'''
-
-    model = Post
-    paginate_by = COUNT_OF_POST
-
-    def get_queryset(self):
-        self.queryset = (
-            Post.objects.select_related('author', 'category', 'location')
-            .filter(
-                is_published=True,
-                category__is_published=True,
-                pub_date__lte=timezone.now()
-            )
-        )
-        return self.queryset
+from .mixins import BaseFormMixin, CommentMixin, PostMixin
+from .models import Category, Post, User
 
 
 class PostListView(BaseFormMixin, ListView):
     '''Главная страница со всеми постами.'''
 
-    def get_queryset(self):
-        return (
-            super().get_queryset().annotate(comment_count=Count('comments'))
-            .order_by('-pub_date')
-        )
+    pass
 
 
 class PostDetailView(LoginRequiredMixin, DetailView):
@@ -88,28 +65,12 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         )
 
 
-class PostMixin(UserPassesTestMixin):
-    '''Миксин для классов Post.'''
-
-    form_class = PostForm
-    model = Post
-    template_name = 'blog/create.html'
-    pk_url_kwarg = 'post_id'
-
-    def handle_no_permission(self):
-        return redirect('blog:post_detail', post_id=self.kwargs['post_id'])
-
-    def test_func(self):
-        return self.get_object().author == self.request.user
-
-
 class PostUpdateView(
     LoginRequiredMixin, PostMixin, UpdateView
 ):
     '''Редактирование поста.'''
 
-    def get_success_url(self):
-        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
+    pass
 
 
 class PostDeleteView(
@@ -140,29 +101,12 @@ class CategoryPostsListView(BaseFormMixin, ListView):
             super().get_queryset().filter(
                 category__slug=self.kwargs['category_slug']
             )
-            .order_by('-pub_date')
-            .annotate(comment_count=Count('comments'))
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['category'] = self.category
         return context
-
-
-class CommentMixin:
-    '''Миксин для классов Comment.'''
-
-    form_class = CommentForm
-    model = Comment
-    template_name = 'blog/comment.html'
-    pk_url_kwarg = 'comment_id'
-
-    def get_success_url(self):
-        return reverse('blog:post_detail', args=[self.kwargs['post_id']])
-
-    def test_func(self) -> True:
-        return self.get_object().author == self.request.user
 
 
 class CommentCreateView(LoginRequiredMixin, CommentMixin, CreateView):
@@ -202,19 +146,12 @@ class ProfileListView(BaseFormMixin, ListView):
         )
         if self.request.user == self.get_username:
             return (
-                Post.objects.select_related('author', 'category', 'location')
-                .filter(
-                    author__username=self.kwargs['username']
-                )
-                .order_by('-pub_date')
-                .annotate(comment_count=Count('comments'))
+                self.get_queryset_comment()
+                .filter(author__username=self.kwargs['username'])
             )
         return (
-            super().get_queryset().filter(
-                author__username=self.kwargs['username']
-            )
-            .order_by('-pub_date')
-            .annotate(comment_count=Count('comments'))
+            super().get_queryset()
+            .filter(author__username=self.kwargs['username'])
         )
 
     def get_context_data(self, **kwargs):
